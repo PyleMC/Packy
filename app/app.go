@@ -1,6 +1,9 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+
 	"fyne.io/fyne/v2"
 	fyneApp "fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
@@ -20,7 +23,10 @@ func New() *App {
 	w.SetMaster()
 
 	content := container.NewStack()
-	content.Objects = []fyne.CanvasObject{buildZipView()}
+	zipView := buildZipView()
+	encryptView := buildEncryptView()
+	decryptView := buildDecryptView()
+	content.Objects = []fyne.CanvasObject{zipView}
 
 	title := canvas.NewText("Packy", a.Settings().Theme().Color(theme.ColorNameForeground, a.Settings().ThemeVariant()))
 	title.TextSize = 24
@@ -28,13 +34,13 @@ func New() *App {
 	nav := buildNav(func(name string) {
 		switch name {
 		case "Zip Pack":
-			content.Objects = []fyne.CanvasObject{buildZipView()}
+			content.Objects = []fyne.CanvasObject{zipView}
 		case "Encrypt Pack":
-			// TODO content.Objects = []fyne.CanvasObject{buildEncryptView()}
+			content.Objects = []fyne.CanvasObject{encryptView}
 		case "Decrypt Pack":
-			// TODO content.Objects = []fyne.CanvasObject{buildDecryptView()}
+			content.Objects = []fyne.CanvasObject{decryptView}
 		default:
-			content.Objects = []fyne.CanvasObject{buildZipView()}
+			content.Objects = []fyne.CanvasObject{zipView}
 		}
 		content.Refresh()
 	})
@@ -86,12 +92,27 @@ func buildNav(onSelect func(name string)) fyne.CanvasObject {
 func buildZipView() fyne.CanvasObject {
 	status := widget.NewLabel("No actions yet.")
 	folderEntry := widget.NewEntry()
-	folderEntry.SetPlaceHolder("Path to mcpack folder")
+	folderEntry.SetPlaceHolder("Path to resource pack folder")
 	outputEntry := widget.NewEntry()
 	outputEntry.SetPlaceHolder("Output zip path (optional)")
 
-	zipBtn := widget.NewButton("Zip mcpack", func() {
-		status.SetText("Noot Noot!") // TODO zip action
+	var zipBtn *widget.Button
+	zipBtn = widget.NewButton("Zip resource pack", func() {
+		runAction(status, zipBtn, func() (string, error) {
+			folderPath := strings.TrimSpace(folderEntry.Text)
+			outputPath := strings.TrimSpace(outputEntry.Text)
+			if folderPath == "" {
+				return "", fmt.Errorf("folder path is required")
+			}
+			if err := validateResourcePackFolder(folderPath); err != nil {
+				return "", err
+			}
+			zipPath, err := zipPackFromFolder(folderPath, outputPath)
+			if err != nil {
+				return "", err
+			}
+			return "Saved zip: " + zipPath, nil
+		})
 	})
 
 	note := widget.NewLabel("Zips the contents of the resourcepack folder into a .zip.")
@@ -100,6 +121,54 @@ func buildZipView() fyne.CanvasObject {
 		widget.NewFormItem("Output Zip", outputEntry),
 	)
 	return container.NewBorder(nil, status, nil, nil, container.NewVBox(note, form, zipBtn))
+}
+
+func buildEncryptView() fyne.CanvasObject {
+	status := widget.NewLabel("No actions yet.")
+	zipEntry := widget.NewEntry()
+	zipEntry.SetPlaceHolder("Path to zip pack")
+	keyEntry := widget.NewPasswordEntry()
+	keyEntry.SetPlaceHolder("Encryption key/password")
+	outputEntry := widget.NewEntry()
+	outputEntry.SetPlaceHolder("Output encrypted path (optional)")
+
+	var encryptBtn *widget.Button
+	encryptBtn = widget.NewButton("Encrypt zip pack", func() {
+		runAction(status, encryptBtn, func() (string, error) {
+			return "Encrypt action not implemented.", nil
+		})
+	})
+
+	form := widget.NewForm(
+		widget.NewFormItem("Zip Path", zipEntry),
+		widget.NewFormItem("Key", keyEntry),
+		widget.NewFormItem("Output", outputEntry),
+	)
+	return container.NewBorder(nil, status, nil, nil, container.NewVBox(form, encryptBtn))
+}
+
+func buildDecryptView() fyne.CanvasObject {
+	status := widget.NewLabel("No actions yet.")
+	encryptedEntry := widget.NewEntry()
+	encryptedEntry.SetPlaceHolder("Path to encrypted pack")
+	keyEntry := widget.NewPasswordEntry()
+	keyEntry.SetPlaceHolder("Decryption key/password")
+	outputEntry := widget.NewEntry()
+	outputEntry.SetPlaceHolder("Output zip path (optional)")
+
+	var decryptBtn *widget.Button
+	decryptBtn = widget.NewButton("Decrypt pack", func() {
+		runAction(status, decryptBtn, func() (string, error) {
+			return "Decrypt action not implemented.", nil
+		})
+	})
+
+	form := widget.NewForm(
+		widget.NewFormItem("Encrypted Path", encryptedEntry),
+		widget.NewFormItem("Key", keyEntry),
+		widget.NewFormItem("Output", outputEntry),
+	)
+	return container.NewBorder(nil, status, nil, nil, container.NewVBox(form, decryptBtn))
 }
 
 type fixedSizeLayoutExpand struct {
@@ -127,4 +196,20 @@ func (l *fixedSizeLayoutExpand) Layout(objects []fyne.CanvasObject, size fyne.Si
 
 func (l *fixedSizeLayoutExpand) MinSize(objects []fyne.CanvasObject) fyne.Size {
 	return l.size
+}
+
+func runAction(status *widget.Label, button *widget.Button, action func() (string, error)) {
+	button.Disable()
+	status.SetText("Working...")
+	go func() {
+		message, err := action()
+		if err != nil {
+			status.SetText(err.Error())
+		} else if message != "" {
+			status.SetText(message)
+		} else {
+			status.SetText("Done.")
+		}
+		button.Enable()
+	}()
 }
